@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}F1 Strategy{% endblock %}</title>
+  <!-- Plotly (no-map bundle ~2 MB) -->
+  <script src="https://cdn.plot.ly/plotly-basic-2.27.0.min.js"></script>
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav class="topnav">
+    <span class="logo">⬡ F1 Strategy</span>
+    <a href="/next-event">Next Event</a>
+    <a href="/live">Live</a>
+    <a href="/strategy">Strategy Lab</a>
+  </nav>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

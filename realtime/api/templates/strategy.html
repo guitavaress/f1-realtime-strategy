@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Strategy Lab — F1 Strategy{% endblock %}
+{% block content %}
+<h1>Strategy Lab</h1>
+
+<form hx-post="/strategy/simulate" hx-target="#results" hx-swap="innerHTML">
+  <label>Year <input type="number" name="year" value="2025" /></label>
+  <label>Round <input type="number" name="round_number" value="1" /></label>
+  <label><input type="checkbox" name="wet" /> Wet race</label>
+  <button type="submit">Simulate</button>
+</form>
+
+<div id="results">
+  <!-- Monte Carlo results injected here via HTMX -->
+</div>
+{% endblock %}

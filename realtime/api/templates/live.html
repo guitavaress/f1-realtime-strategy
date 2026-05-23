@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Live — F1 Strategy{% endblock %}
+{% block content %}
+<h1>Live Session</h1>
+<p>Session: <strong>{{ session_id }}</strong></p>
+
+<div id="lap-feed">
+  <!-- Updated via WebSocket -->
+</div>
+
+<script>
+const ws = new WebSocket(`ws://${location.host}/ws/live?session_id={{ session_id }}`);
+ws.onmessage = (e) => {
+  const lap = JSON.parse(e.data);
+  const row = document.createElement("p");
+  row.textContent = `${lap.driver} L${lap.lap_number} — ${lap.laptime_s}s (${lap.compound}, life ${lap.tyre_life})`;
+  document.getElementById("lap-feed").prepend(row);
+};
+</script>
+{% endblock %}

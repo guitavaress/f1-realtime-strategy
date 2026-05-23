@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ event_name }} {{ year }} — F1 Strategy{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>{{ event_name }}</h1>
+  <span class="meta">Round {{ round_number }} · {{ year }} · {{ race_date }}</span>
+  <a href="/next-event?refresh=true" class="btn-refresh">↻ Refresh forecast</a>
+</div>
+
+<div class="card-row">
+
+  <div class="card">
+    <h2>Pirelli Allocation</h2>
+    <table class="alloc-table">
+      <thead><tr><th>Compound</th><th>Physical</th></tr></thead>
+      <tbody>
+        {% for cat in ['SOFT', 'MEDIUM', 'HARD'] %}
+        <tr>
+          <td class="compound compound-{{ cat.lower() }}">{{ cat }}</td>
+          <td>{{ allocation.get(cat) or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Race Day Forecast</h2>
+    <div class="kpi-row">
+      <div class="kpi">
+        <span class="kpi-val">{{ forecast.track_temp_c }}°C</span>
+        <span class="kpi-label">Track temp</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-val">{{ forecast.rainfall_prob | int }}%</span>
+        <span class="kpi-label">Rain probability</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="card full-width">
+  <h2>Predicted Degradation Curves</h2>
+  {% if chart_html %}
+    {{ chart_html | safe }}
+  {% else %}
+    <p class="no-data">No historical data available for this circuit / temperature bucket.</p>
+  {% endif %}
+  <p class="footnote">
+    Generated at {{ generated_at.strftime('%Y-%m-%d %H:%M UTC') if generated_at else '—' }}.
+    Curves based on last 3 seasons of race data from the same circuit.
+    Shaded band = ±1σ inter-year pace variance.
+  </p>
+</div>
+
+{% endblock %}
