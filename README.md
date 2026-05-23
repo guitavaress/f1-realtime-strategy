@@ -27,13 +27,36 @@ Pré-requisito: o Postgres do `f1-data-pipeline` precisa estar de pé
 cd ../f1-data-pipeline
 docker compose up -d postgres
 
-# 2. Instala dependências e roda a API (migrations aplicam no startup)
+# 2. Sobe o Redis local (pub/sub do livetiming)
 cd ../f1-realtime-strategy
+docker compose up -d redis
+
+# 3. Instala dependências e roda a API (migrations aplicam no startup)
 uv sync
 uv run uvicorn realtime.api.main:app --reload --port 8081
 ```
 
 Abrir: <http://localhost:8081/next-event>
+
+### Replay de sessão histórica (livetiming worker)
+
+```bash
+# Reaproveita cache do pipeline; --speed 30 colapsa Bahrein 2024 (~2.5h) em ~5 min
+$env:FASTF1_CACHE_DIR='C:\Claude\f1-data-pipeline\cache'
+uv run python -m realtime.ingest.livetiming_worker --year 2024 --round 1 --session R --speed 30
+```
+
+O worker imprime o `session_id` (UUID) no stdout. Abrir <http://localhost:8081/live/{session_id}> para acompanhar o feed.
+
+## Rotas
+
+| Rota                          | Descrição                                                       |
+|-------------------------------|-----------------------------------------------------------------|
+| `GET /next-event`             | Previsão pré-evento: alocação Pirelli + chart de degradação ±1σ |
+| `GET /live/{session_id}`      | Feed ao vivo (HTMX) consumindo o WebSocket abaixo                |
+| `WS  /ws/live?session_id=...` | Push de cada lap publicado em `lap:{session_id}` no Redis        |
+| `POST /strategy/simulate`     | Monte Carlo de estratégias (Fase 4, ainda não implementado)      |
+| `GET /compare/{session_id}`   | Delta actual × predicted (Fase 3, ainda não implementado)        |
 
 ## Schemas Próprios
 

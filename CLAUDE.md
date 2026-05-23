@@ -165,7 +165,11 @@ Para desenvolvimento local sem Docker, use `DATABASE_URL=postgresql://airflow:ai
 # Subir API + Redis (Postgres externo precisa estar up)
 docker compose up --build
 
-# Rodar migrações (uma vez por ambiente limpo)
+# Subir só o Redis (porta 6379 exposta no host para rodar worker/API fora do compose)
+docker compose up -d redis
+
+# Migrations rodam idempotentemente no startup da API (api/main.py::_run_migrations).
+# Aplicação manual (opcional, exige psql no PATH):
 psql -U airflow -d f1 -h localhost -f migrations/001_predictions_schema.sql
 psql -U airflow -d f1 -h localhost -f migrations/002_live_schema.sql
 psql -U airflow -d f1 -h localhost -f migrations/003_comparisons_schema.sql
@@ -176,11 +180,15 @@ uv sync
 # Rodar API localmente (sem Docker)
 uv run uvicorn realtime.api.main:app --reload --port 8081
 
+# Rodar livetiming worker (modo replay; reaproveita cache do pipeline)
+$env:FASTF1_CACHE_DIR='C:\Claude\f1-data-pipeline\cache'
+uv run python -m realtime.ingest.livetiming_worker --year 2024 --round 1 --session R --speed 30
+
 # Rodar testes
 uv run pytest
 
-# Verificar conexão com Postgres (Fase 0)
-uv run python -c "from realtime.db import engine; print(engine.execute('select count(*) from marts.tyre_degradation').scalar())"
+# Verificar conexão com Postgres
+uv run python -c "from realtime.db import engine; from sqlalchemy import text; print(engine.connect().execute(text('select count(*) from marts.tyre_degradation')).scalar())"
 ```
 
 ---
@@ -188,46 +196,38 @@ uv run python -c "from realtime.db import engine; print(engine.execute('select c
 ## Status de Implementação
 
 ### Fase 0 — Setup ✅ Concluída
-Todos os arquivos criados. Nada foi executado ainda — nenhuma dependência instalada, nenhum container rodando.
+Estrutura inicial, docker-compose, pyproject (uv), migrations em disco.
 
-### Fase 1 — Preditor pré-evento ✅ Código pronto, aguardando primeira execução
-Módulos implementados (todos em `realtime/`):
-- `config.py` — env vars com defaults de dev
-- `db.py` — SQLAlchemy engine + `read_df()`
-- `ingest/schedule.py` — `next_event()` via fastf1
-- `predict/allocation.py` — query `staging.pirelli_compound_allocations`
-- `predict/degradation.py` — `get_weather_profile()`, `get_circuit_profile()`, `get_baseline_pace()`
-- `predict/weather.py` — Open-Meteo + heurística track temp por circuito
-- `predict/model.py` — `generate_forecast()` + `get_latest_forecast()`
-- `api/main.py` — aplica migrations automaticamente no startup (idempotente)
-- `api/routes/next_event.py` — GET `/next-event` com Plotly chart ±1σ
-- `api/templates/next_event.html` + `api/static/style.css` — dark theme
+### Fase 1 — Preditor pré-evento ✅ Concluída
+`GET /next-event` retornando 200 com chart Plotly de degradação ±1σ por composto.
+Módulos:
+- `config.py`, `db.py`, `ingest/schedule.py`
+- `predict/allocation.py`, `predict/degradation.py`, `predict/weather.py`, `predict/model.py`
+- `api/main.py` (lifespan aplica migrations idempotente), `api/routes/next_event.py`
+- Template `next_event.html` + `static/style.css` (dark theme)
 
-**Primeira execução (fazer na ordem):**
-```bash
-# 1. Postgres do pipeline precisa estar up (banco compartilhado)
-cd C:\Claude\f1-data-pipeline
-docker compose up -d postgres
+**Dependência crítica:** `staging.pirelli_compound_allocations` precisa existir (criada por `dbt seed` no pipeline). Se não existir, `predict/allocation.py` retorna `{}` e a previsão roda com `compound_name = NULL` no template (mostra `—`).
 
-# 2. Instalar dependências do realtime
-cd C:\Claude\f1-realtime-strategy
-uv sync
+### Fase 2 — Ingestão live ✅ MVP em main (PR #1 mergeada)
+Worker em modo replay, persistência em `live.lap`, pub/sub Redis e WebSocket prontos. Validado end-to-end com Bahrein 2024 R1 (1127 laps, 20 drivers).
 
-# 3. Rodar a API (migrations criam schemas automaticamente no startup)
-uv run uvicorn realtime.api.main:app --reload --port 8081
+Módulos implementados:
+- `ingest/livetiming_worker.py` — `run_replay()` carrega sessão FastF1, itera laps cronologicamente (com sleep proporcional ao gap real ÷ `speed`), faz INSERT idempotente em `live.lap` e publica JSON em `lap:<session_id>` no Redis. CLI via `python -m realtime.ingest.livetiming_worker`.
+- `api/routes/live.py` — `GET /live/{session_id}` renderiza template; `WS /ws/live?session_id=...` faz subscribe no canal Redis e push pro browser.
+- `api/templates/live.html` — JS conecta no WS e prepende cada lap ao feed.
+- `docker-compose.yml` — porta 6379 do Redis exposta no host pra worker/API rodarem fora do compose em dev.
 
-# 4. Abrir no browser
-# http://localhost:8081/next-event
-```
+**Limitações deliberadas (NÃO são bugs):**
+1. `live.lap.received_at = now()` no replay, não o wall-clock original da sessão histórica.
+2. WS detecta disconnect só na próxima `send_text` (cliente uni-direcional, sem heartbeat).
 
-**Dependência crítica:** `staging.pirelli_compound_allocations` precisa existir (criada por `dbt seed` no pipeline). Se não existir, `predict/allocation.py` retorna `{}` mas a previsão ainda roda com `compound_name = NULL`.
+Documentadas no docstring dos respectivos módulos.
 
-### Fase 2 — Ingestão live 🔲 Não iniciada
-Stub criado em `ingest/livetiming_worker.py` e `ingest/undercut_connector.py`.
-Requer: implementar worker FastF1 livetiming → Redis pub/sub + rota WebSocket `/ws/live`.
+### Fase 2.1 — Live real via undercut-f1 sidecar 🔲 Não iniciada
+`ingest/undercut_connector.py::is_available()` implementado; `get_laps()` ainda stub. Depende de subir o sidecar .NET no compose e adicionar modo `--live` ao worker. Necessário quando rolar corrida real (FastF1 SignalRClient só grava raw stream, não permite parse em tempo real).
 
 ### Fase 3 — Comparação live × predito 🔲 Não iniciada
-Stub em `compare/residuals.py`. Depende da Fase 2.
+Stub em `compare/residuals.py`. Dados de entrada já disponíveis: `live.lap` populado pela Fase 2, `predictions.compound_curve` pela Fase 1. Próxima fase lógica.
 
 ### Fase 4 — Monte Carlo strategy lab 🔲 Não iniciada
 `simulate/strategy.py` e `simulate/pitloss.py` implementados (valores hardcoded).
