@@ -34,6 +34,13 @@ async def ws_live(websocket: WebSocket, session_id: str):
 
     The connection stays open until the client disconnects or the session ends
     (we don't auto-close — the worker just stops publishing).
+
+    NOTE — disconnect detection is lazy: ``WebSocketDisconnect`` only fires
+    when this handler tries to ``send_text`` (the client is uni-directional and
+    never sends frames). If the client closes the tab during a quiet period
+    with no incoming laps, this coroutine stays parked on ``get_message`` until
+    the next publish arrives. Acceptable for Fase 2 MVP; a heartbeat or a
+    parallel ``receive_text`` task would tighten cleanup.
     """
     await websocket.accept()
 

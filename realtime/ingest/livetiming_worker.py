@@ -16,6 +16,12 @@ Each completed lap is:
   1) inserted into ``live.lap``
   2) published as JSON to Redis channel ``lap:<session_id>``
 
+NOTE — replay timestamp semantics: ``live.lap.received_at`` defaults to ``now()``
+at insert time, so a replay session looks like "live now" to downstream readers.
+The original wall-clock of the historical lap is **not** preserved. Fase 3+
+analytics that need real session time must derive it from ``year/round_number``
+plus ``LapTime``/``Stint`` rather than from ``received_at``.
+
 CLI usage:
     uv run python -m realtime.ingest.livetiming_worker --year 2024 --round 22 --session R --speed 60
 """
