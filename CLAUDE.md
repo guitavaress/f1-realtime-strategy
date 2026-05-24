@@ -173,6 +173,8 @@ docker compose up -d redis
 psql -U airflow -d f1 -h localhost -f migrations/001_predictions_schema.sql
 psql -U airflow -d f1 -h localhost -f migrations/002_live_schema.sql
 psql -U airflow -d f1 -h localhost -f migrations/003_comparisons_schema.sql
+psql -U airflow -d f1 -h localhost -f migrations/004_lap_residual_stddev.sql
+psql -U airflow -d f1 -h localhost -f migrations/005_lap_residual_pk_forecast.sql
 
 # Instalar deps localmente
 uv sync
@@ -226,8 +228,19 @@ Documentadas no docstring dos respectivos módulos.
 ### Fase 2.1 — Live real via undercut-f1 sidecar 🔲 Não iniciada
 `ingest/undercut_connector.py::is_available()` implementado; `get_laps()` ainda stub. Depende de subir o sidecar .NET no compose e adicionar modo `--live` ao worker. Necessário quando rolar corrida real (FastF1 SignalRClient só grava raw stream, não permite parse em tempo real).
 
-### Fase 3 — Comparação live × predito 🔲 Não iniciada
-Stub em `compare/residuals.py`. Dados de entrada já disponíveis: `live.lap` populado pela Fase 2, `predictions.compound_curve` pela Fase 1. Próxima fase lógica.
+### Fase 3 — Comparação live × predito ✅ MVP em PR (#2)
+`GET /compare` (picker) + `GET /compare/{session_id}` (KPIs + scatter por composto com banda ±1σ + tabela agregada). Validado end-to-end com Bahrein 2024 R1 (1127 laps → 1127 residuals).
+
+Módulos implementados:
+- `compare/residuals.py` — `compute_and_save(session_id, forecast_id=None, *, force=False)`. JOIN único `live.lap × predictions.compound_curve`, persiste em `comparisons.lap_residual` via `INSERT … SELECT … ON CONFLICT DO NOTHING`. Idempotente pela PK (4 colunas incluindo `forecast_id`); suporta growing session (worker ainda escrevendo) e `force=True` para limpar e recomputar. `_resolve_forecast_id` busca o forecast mais recente via `get_latest_forecast(year, round_number)`.
+- `api/routes/compare.py` — `GET /compare` picker + `GET /compare/{session_id}` em **sync `def`** (Starlette roda em threadpool, não bloqueia o event loop dos WS feeds da Fase 2). Status codes distintos: `ValueError "Session not found"` → 404, `ValueError "No forecast..."` → 424, `SQLAlchemyError` → 503. `?refresh=true` força DELETE+INSERT; `?driver=ABC` filtra só o scatter (KPIs/tabela ficam globais), com aviso explícito quando o filtro casa zero laps.
+- `api/templates/compare.html` + `compare_index.html` — dark theme, Pirelli colors (SOFT vermelho / MEDIUM amarelo / HARD branco), banda ±1σ sombreada, linha zero, tooltip com `σ:` em segundos (ou `—` quando NULL na curva).
+- `migrations/004_lap_residual_stddev.sql` — adiciona `stddev_s NUMERIC` ao lado de cada residual, evitando re-join com `compound_curve` em runtime.
+- `migrations/005_lap_residual_pk_forecast.sql` — PK passa a incluir `forecast_id`. **Crítico**: sem isso, `ON CONFLICT DO NOTHING` dropava silenciosamente as linhas do segundo forecast quando `/next-event` rodava de novo (ex: clima mudou).
+
+Tests: 9 unit/integration em `tests/test_compare_residuals.py` cobrindo filters de laps inválidas, idempotência, força recompute com delete externo, growing session com worker mid-flight, resolve forecast por (year,round), `ValueError` para session/forecast ausente.
+
+**A polir junto com Claude Design:** o visual atual segue o `style.css` do dark theme da Fase 1; uma passada com o `DESIGN.md` do `f1-data-pipeline` está prevista pós-merge.
 
 ### Fase 4 — Monte Carlo strategy lab 🔲 Não iniciada
 `simulate/strategy.py` e `simulate/pitloss.py` implementados (valores hardcoded).

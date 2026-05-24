@@ -46,7 +46,7 @@ $env:FASTF1_CACHE_DIR='C:\Claude\f1-data-pipeline\cache'
 uv run python -m realtime.ingest.livetiming_worker --year 2024 --round 1 --session R --speed 30
 ```
 
-O worker imprime o `session_id` (UUID) no stdout. Abrir <http://localhost:8081/live/{session_id}> para acompanhar o feed.
+O worker imprime o `session_id` (UUID) no stdout. Abrir <http://localhost:8081/live/{session_id}> para acompanhar o feed, ou <http://localhost:8081/compare/{session_id}> para ver os residuais contra a previsão.
 
 ## Rotas
 
@@ -55,8 +55,9 @@ O worker imprime o `session_id` (UUID) no stdout. Abrir <http://localhost:8081/l
 | `GET /next-event`             | Previsão pré-evento: alocação Pirelli + chart de degradação ±1σ |
 | `GET /live/{session_id}`      | Feed ao vivo (HTMX) consumindo o WebSocket abaixo                |
 | `WS  /ws/live?session_id=...` | Push de cada lap publicado em `lap:{session_id}` no Redis        |
+| `GET /compare`                | Picker — lista sessões em `live.session`                         |
+| `GET /compare/{session_id}`   | Delta actual × predicted: KPIs + scatter ±1σ + tabela por composto |
 | `POST /strategy/simulate`     | Monte Carlo de estratégias (Fase 4, ainda não implementado)      |
-| `GET /compare/{session_id}`   | Delta actual × predicted (Fase 3, ainda não implementado)        |
 
 ## Schemas Próprios
 
