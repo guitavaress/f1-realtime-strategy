@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Residuals — F1 Strategy{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Live × Predicted</h1>
+  <span class="meta">Session <code>{{ session_id[:8] }}…</code>
+    {% if driver_filter %} · driver filter <strong>{{ driver_filter | upper }}</strong>{% endif %}
+  </span>
+  <a href="/compare/{{ session_id }}?refresh=true" class="btn-refresh">↻ Recompute</a>
+</div>
+
+<div class="card-row">
+
+  <div class="card">
+    <span class="kpi-label">Laps compared</span>
+    <span class="kpi-val">{{ laps_compared }}<span class="kpi-suffix"> / {{ total_laps }}</span></span>
+  </div>
+
+  <div class="card">
+    <span class="kpi-label">Drivers</span>
+    <span class="kpi-val">{{ drivers_compared }}</span>
+  </div>
+
+  <div class="card">
+    <span class="kpi-label">Mean residual</span>
+    <span class="kpi-val">
+      {% if mean_residual_s is not none %}{{ '%+0.3f' | format(mean_residual_s) }}s{% else %}—{% endif %}
+    </span>
+  </div>
+
+  <div class="card">
+    <span class="kpi-label">RMSE</span>
+    <span class="kpi-val">
+      {% if rmse_s is not none %}{{ '%0.3f' | format(rmse_s) }}s{% else %}—{% endif %}
+    </span>
+  </div>
+
+  <div class="card">
+    <span class="kpi-label">% within ±1σ</span>
+    <span class="kpi-val">
+      {% if pct_within_1sigma is not none %}{{ '%0.0f' | format(pct_within_1sigma) }}%{% else %}—{% endif %}
+    </span>
+  </div>
+
+</div>
+
+<div class="card full-width">
+  <h2>Residual × lap number</h2>
+  {% if driver_empty %}
+    <p class="no-data">Driver <strong>{{ driver_filter }}</strong> has no comparable laps in this session. <a href="/compare/{{ session_id }}">Clear filter</a>.</p>
+  {% elif chart_html %}
+    {{ chart_html | safe }}
+  {% else %}
+    <p class="no-data">No comparable laps for this session (need SOFT/MEDIUM/HARD laps with tyre_life 1..50 and a matching forecast).</p>
+  {% endif %}
+  <p class="footnote">
+    Residual = actual lap time − predicted from <code>predictions.compound_curve</code>.
+    Shaded band ≈ ±1σ (mean of per-lap stddev). Positive residual = slower than predicted.
+  </p>
+</div>
+
+{% if aggregates %}
+<div class="card full-width">
+  <h2>By compound</h2>
+  <table class="alloc-table">
+    <thead>
+      <tr>
+        <th>Compound</th>
+        <th>Laps</th>
+        <th>Mean residual</th>
+        <th>RMSE</th>
+        <th>Mean tyre life</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in aggregates %}
+      <tr>
+        <td class="compound compound-{{ row.compound.lower() }}">{{ row.compound }}</td>
+        <td>{{ row.count }}</td>
+        <td>{{ '%+0.3f' | format(row.mean_residual_s) }}s</td>
+        <td>{{ '%0.3f' | format(row.rmse_s) }}s</td>
+        <td>{{ '%0.1f' | format(row.mean_tyre_life) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}
