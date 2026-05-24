@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Compare — pick a session{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Compare — recent sessions</h1>
+  <span class="meta">Pick a session to view live × predicted residuals.</span>
+</div>
+
+{% if sessions %}
+<div class="card full-width">
+  <table class="alloc-table">
+    <thead>
+      <tr>
+        <th>Session</th>
+        <th>Year</th>
+        <th>Round</th>
+        <th>Type</th>
+        <th>Started</th>
+        <th>Laps</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td><code>{{ s.session_id[:8] }}…</code></td>
+        <td>{{ s.year }}</td>
+        <td>{{ s.round_number }}</td>
+        <td>{{ s.session_type }}</td>
+        <td>{% if s.started_at %}{{ s.started_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}</td>
+        <td>{{ s.lap_count }}</td>
+        <td><a href="/compare/{{ s.session_id }}">Open →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card full-width">
+  <p class="no-data">No sessions yet. Run the livetiming worker first:
+  <code>uv run python -m realtime.ingest.livetiming_worker --year 2024 --round 1 --session R --speed 30</code></p>
+</div>
+{% endif %}
+
+{% endblock %}

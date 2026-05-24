@@ -76,6 +76,7 @@ body {
 .kpi { display: flex; flex-direction: column; }
 .kpi-val   { font-size: 1.8rem; font-weight: 700; line-height: 1; }
 .kpi-label { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+.kpi-suffix { font-size: 0.9rem; color: var(--muted); font-weight: 400; }
 
 /* ── Misc ────────────────────────────────── */
 .no-data  { color: var(--muted); font-style: italic; }
